@@ -312,6 +312,18 @@ let breakProgress = 0;
 let breakOverlay = null;
 const BREAK_TIME = 0.5;
 let maxFallSpeed = 0;
+const projectileGeometry = new THREE.SphereGeometry(0.08,8,8);
+const projectileMaterial = new THREE.MeshBasicMaterial({color:0xffcc44});
+const projectilePool = [];
+const dropGeometry = new THREE.BoxGeometry(0.4,0.4,0.4);
+const dropMaterialCache = new Map();
+const dropPool = [];
+
+function getDropMaterial(color){
+  const key = String(color);
+  if(!dropMaterialCache.has(key)) dropMaterialCache.set(key, new THREE.MeshLambertMaterial({color}));
+  return dropMaterialCache.get(key);
+}
 
 // Admin state
 let adminGod=false,adminInf=false,adminFly=false;
@@ -1812,9 +1824,13 @@ function updateMobs(delta){
 }
 
 function spawnProjectile(position, direction, owner){
-  const geo=new THREE.SphereGeometry(0.08,8,8);
-  const mat=new THREE.MeshBasicMaterial({color:0xffcc44});
-  const mesh=new THREE.Mesh(geo,mat);
+  let mesh = projectilePool.pop();
+  if(!mesh){
+    mesh = new THREE.Mesh(projectileGeometry, projectileMaterial);
+  } else {
+    mesh.material = projectileMaterial;
+  }
+  mesh.visible = true;
   mesh.position.copy(position);
   scene.add(mesh);
   projectiles.push({mesh,direction,owner,life:2});
@@ -1827,7 +1843,9 @@ function updateProjectiles(delta){
     proj.life -= delta;
     if(proj.life<=0){
       scene.remove(proj.mesh);
-      proj.mesh.geometry.dispose(); proj.mesh.material.dispose();
+      proj.mesh.visible = false;
+      proj.mesh.position.set(0,0,0);
+      projectilePool.push(proj.mesh);
       projectiles.splice(i,1);
       continue;
     }
@@ -1838,7 +1856,9 @@ function updateProjectiles(delta){
     const type=getBlock(bx,by,bz);
     if(type!==BLOCKS.AIR&&type!==BLOCKS.WATER){
       scene.remove(proj.mesh);
-      proj.mesh.geometry.dispose(); proj.mesh.material.dispose();
+      proj.mesh.visible = false;
+      proj.mesh.position.set(0,0,0);
+      projectilePool.push(proj.mesh);
       projectiles.splice(i,1);
       continue;
     }
@@ -1857,7 +1877,9 @@ function updateProjectiles(delta){
     if(hitMob){
       damageMob(hitMob, proj.owner?.type==='player'?6:4);
       scene.remove(proj.mesh);
-      proj.mesh.geometry.dispose(); proj.mesh.material.dispose();
+      proj.mesh.visible = false;
+      proj.mesh.position.set(0,0,0);
+      projectilePool.push(proj.mesh);
       projectiles.splice(i,1);
       continue;
     }
@@ -1869,7 +1891,9 @@ function updateProjectiles(delta){
       updateHealthUI();
       showMsg('Hit by pillager!');
       scene.remove(proj.mesh);
-      proj.mesh.geometry.dispose(); proj.mesh.material.dispose();
+      proj.mesh.visible = false;
+      proj.mesh.position.set(0,0,0);
+      projectilePool.push(proj.mesh);
       projectiles.splice(i,1);
       if(health<=0) showMsg('You died!');
       continue;
@@ -1879,9 +1903,14 @@ function updateProjectiles(delta){
 
 function spawnDrop(type,x,y,z,count=1){
   const cols = BLOCK_COLORS[type] || ITEM_COLORS[type] || [0xaaaaaa,0xbbbbbb,0x888888];
-  const geo=new THREE.BoxGeometry(0.4,0.4,0.4);
-  const mat=new THREE.MeshLambertMaterial({color:cols[0]});
-  const mesh=new THREE.Mesh(geo,mat);
+  const material = getDropMaterial(cols[0]);
+  let mesh = dropPool.pop();
+  if(!mesh){
+    mesh = new THREE.Mesh(dropGeometry, material);
+  } else {
+    mesh.material = material;
+  }
+  mesh.visible = true;
   mesh.position.set(x,y,z);
   scene.add(mesh);
   drops.push({mesh,type,count,vel:new THREE.Vector3(0,0,0),life:30});
@@ -1893,7 +1922,11 @@ function updateDrops(delta){
     drop.life-=delta;
     if(drop.life<=0){
       scene.remove(drop.mesh);
-      drop.mesh.geometry.dispose(); drop.mesh.material.dispose();
+      drop.mesh.visible = false;
+      drop.mesh.position.set(0,0,0);
+      drop.mesh.rotation.set(0,0,0);
+      drop.vel.set(0,0,0);
+      dropPool.push(drop.mesh);
       drops.splice(i,1);
       continue;
     }
